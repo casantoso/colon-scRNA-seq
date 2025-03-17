@@ -71,33 +71,38 @@ merged_seurat <- ScaleData(merged_seurat, features = all.genes)
 # 6. DIMENSIONAL REDUCTION
 ####################################################################################################
 
-# Principal Component Analysis (PCA)
+# Perform Principal Component Analysis (PCA) on the scaled data
 merged_seurat <- RunPCA(merged_seurat, features = VariableFeatures(object = merged_seurat))
 
-# Cluster cells
+# Decide how many principal components to include.
+ElbowPlot(merged_seurat)
+
+# Cluster the cells using 12 Principal Components
 merged_seurat <- FindNeighbors(merged_seurat, dims = 1:12)
 merged_seurat <- FindClusters(merged_seurat, resolution = 0.5)
 
-# UMAP
+# Run UMAP
 merged_seurat <- RunUMAP(merged_seurat, dims = 1:12)
 
-merged_seurat$group <- ifelse(grepl("Young", merged_seurat$orig.ident), "Young", "Old")
-Idents(merged_seurat) <- "group"
-
 # Plot the distribution of young cells vs old cells
-DimPlot(merged_seurat, reduction = "umap", group.by = "group", pt.size = 0.5, alpha = 0.5 ) +
+DimPlot(merged_seurat, reduction = "umap", group.by = "orig.ident", pt.size = 0.5, alpha = 0.5 ) +
   ggtitle("Young vs Old")
 
 # Plot the clusters
 DimPlot(merged_seurat, reduction = "umap", group.by = "seurat_clusters", pt.size = 0.5, label = TRUE)
         
 # Plot the QC metrics on the UMAP
+# nFeature_RNA
 FeaturePlot(merged_seurat, features = "nFeature_RNA", reduction = "umap") +
   ggtitle("nFeature_RNA")+
   scale_colour_gradientn(colours = c("blue", "green", "yellow", "red"))
+
+# nCount_RNA
 FeaturePlot(merged_seurat, features = "nCount_RNA", reduction = "umap") +
   ggtitle("nCount_RNA")+
   scale_colour_gradientn(colours = c("blue", "green", "yellow", "red"))
+
+# percent.mt
 FeaturePlot(merged_seurat, features = "percent.mt", reduction = "umap") + 
   ggtitle("percent.mt")+
   scale_colour_gradientn(colours = c("blue", "green", "yellow", "red"))
@@ -113,7 +118,7 @@ cluster_group_percent <- cluster_group_counts %>%
   mutate(percent = count / sum(count) * 100) %>%
   ungroup()
 
-# Bar plot of Percentage of Young vs. Old Cells per Cluster 
+# Create a bar plot of Percentage of Young vs. Old Cells per Cluster
 ggplot(cluster_group_percent, aes(x = seurat_clusters, y = percent, fill = orig.ident)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(x = "Cluster", y = "Percentage", fill = "Group", 
@@ -121,7 +126,7 @@ ggplot(cluster_group_percent, aes(x = seurat_clusters, y = percent, fill = orig.
   theme_minimal()
 
 
-# calculate mitochondrial percentage for each cluster (to make sure no clusters represents dying cells)
+# Calculate mitochondrial percentage for each cluster (to make sure no clusters represents dying cells)
 mt_percent_by_cluster <- metadata %>%
   group_by(seurat_clusters) %>%
   summarise(
@@ -141,7 +146,7 @@ ggplot(mt_percent_by_cluster, aes(x = seurat_clusters, y = mean_mt_percent)) +
 
 merged.markers <- FindAllMarkers(merged_seurat)
 
-# Rank based on log2fc
+# Rank markers based on log2fc
 merged.markers <- merged.markers %>%
   group_by(cluster) %>%
   arrange(cluster, desc(avg_log2FC))
@@ -160,13 +165,13 @@ FeaturePlot(merged_seurat, features = c("Sox2", "Lgr5", "Aldh1", "Epcam", "Mki67
 
 # Combine clusters 10 and 12 to create one stem cell cluster
 merged_seurat$combined_cluster <- as.character(merged_seurat$seurat_clusters)
-merged_seurat$combined_cluster[merged_seurat$seurat_clusters %in% c("10", "12")] <- "Cluster_10_12"
+merged_seurat$combined_cluster[merged_seurat$seurat_clusters %in% c("10", "12")] <- "stem_cell_cluster"
 merged_seurat$combined_cluster <- factor(merged_seurat$combined_cluster) 
 merged_seurat@meta.data$original_cluster <- merged_seurat$seurat_clusters
-cluster_10_12 <- subset(merged_seurat, subset = combined_cluster == "Cluster_10_12")
+stem_cell_cluster <- subset(merged_seurat, subset = combined_cluster == "stem_cell_cluster")
 
 # Find markers for the stem cell cluster 
-StemCells_YvsO_markers <- FindMarkers(cluster_10_12, ident.1 = "Young", ident.2 = "Old", group.by = "orig.ident")
+StemCells_YvsO_markers <- FindMarkers(stem_cell_cluster, ident.1 = "Young", ident.2 = "Old", group.by = "orig.ident")
 
 # 7871 markers were found
 # Only keep markers with p_val <= 0.05, pct.1 > 0.1 and pct.2 > 0.1, and arrange it by abs_avg_log2FC
@@ -191,8 +196,8 @@ ggplot(StemCells_YvsO_markers, aes(x = avg_log2FC, y = -log10(p_val_adj), label 
   ggtitle("Young vs Old DEGs in Cluster 10 + 12")
 
 # Visualize overlays of certain markers within the stem cell cluster 
-FeaturePlot(cluster_10_12, features = c("Hspa1a"))
-VlnPlot(cluster_10_12, features = c("Ano6"), group.by = "original_cluster", split.by = "orig.ident")
+FeaturePlot(stem_cell_cluster, features = c("Hspa1a"))
+VlnPlot(stem_cell_cluster, features = c("Ano6"), group.by = "original_cluster", split.by = "orig.ident")
 
 
 ####################################################################################################
@@ -206,13 +211,13 @@ library(ggplot2)
 library(dplyr) 
 
 # Select Top 200 Genes
-top_genes_1012 <- StemCells_YvsO_markers %>%
+top_genes <- StemCells_YvsO_markers %>%
   head(200)
 
-gene_list_1012 <- top_genes_1012$gene
+gene_list <- top_genes$gene
 
 # Map Gene Symbols to Entrez IDs
-gene_entrez <- bitr(gene_list_01012, fromType = "SYMBOL",
+gene_entrez <- bitr(gene_list, fromType = "SYMBOL",
                     toType = "ENTREZID",
                     OrgDb = org.Mm.eg.db)
 gene_entrez <- gene_entrez[!duplicated(gene_entrez$ENTREZID), ]
@@ -232,18 +237,3 @@ ego_df <- as.data.frame(ego)
 # Visualize GO Results
 barplot(ego, showCategory = 15) +
   ggtitle("GO Biological Process Enrichment")
-
-# Perform KEGG Enrichment Analysis
-ekegg <- enrichKEGG(gene         = gene_entrez$ENTREZID,
-                    organism     = 'mmu',
-                    keyType      = 'kegg',
-                    pvalueCutoff = 0.05,
-                    pAdjustMethod = 'BH',
-                    qvalueCutoff = 0.5)
-
-ekegg_df <- as.data.frame(ekegg)
-
-# Visualize KEGG Results
-barplot(ekegg, showCategory = 15) +
-  ggtitle("KEGG Pathway Enrichment")
-
