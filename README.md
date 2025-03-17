@@ -6,6 +6,19 @@ The objective of this analysis is to find genes which is differentially expresse
 
 - The R script `Colon scRNAseq merged.R` that was used for this analysis.
 
+## Table of contents
+
+- [Step 0: Set up](#step-0-set-up)
+- [Step 1: Read Input files](#step-1-read-input-files)
+- [Step 2: Filtering](#step-2-filtering)
+- [Step 3: Normalization](#step-3-normalization)
+- [Step 4: Add aneuploidy information](#step-4-Find-Highly-Variable-Genes)
+- [Step 5: Higly variable genes](#step-5-Scale-Data)
+- [Step 6: Scale data](#step-6-Dimensional-Reduction)
+- [Step 7: Dimensionality reduction](#step-7-Find-Cluster-Markers)
+- [Step 8: Cluster markers](#step-8-Merge-Clusters-10-and-12-and-Focus-on-this-Clsuter)
+- [Step 9: Scores](#step-9-Enrichment-Analysis)
+
 
 ## Pipeline
 ### Step 0: Set up
